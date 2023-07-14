@@ -117,9 +117,7 @@ class Player:
         self.idle_frame = 0
         self.current_frame = 0
         self.walking = False
-        self.walking_animation = Animation(
-            [self.sprites[1], self.sprites[2]], 250
-        )
+        self.walking_animation = Animation([self.sprites[1], self.sprites[2]], 250)
         self.jump = ChargeableJump(900, 1800, 50)
         self.vel = pygame.math.Vector2()
         self.pos = pygame.math.Vector2(WIDTH / 2, FLOOR - self.height)
@@ -151,11 +149,15 @@ class Player:
             self.vel.y += self.jump.get_jump_force() * -1
             self.jump.reset()
         elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
-            self.vel.x = -self.speed if not self.vel.y else -self.speed // 2
+            self.vel.x = (
+                -self.speed if not self.vel.y or self.vel.y < 0 else -self.speed // 2
+            )
             self.facing_right = False
         elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
             self.facing_right = True
-            self.vel.x = self.speed if not self.vel.y else self.speed // 2
+            self.vel.x = (
+                self.speed if not self.vel.y or self.vel.y < 0 else self.speed // 2
+            )
 
         if self.vel.x and not self.vel.y and not self.walking:
             self.walking_animation.enter()
