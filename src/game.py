@@ -13,21 +13,39 @@ running = True
 dt = 0
 
 
+class ChargeableJump:
+    def __init__(self, initial_force: int, max_force: int, step: int) -> None:
+        self.step = step
+        self.queued_force = 0
+        self.max_force = max_force
+        self.max_force_reached = False
+        self.initial_force = initial_force
+
+    def charge(self) -> None:
+        if self.queued_force:
+            self.queued_force = pygame.math.clamp(
+                self.queued_force + self.step, self.initial_force, self.max_force
+            )
+        else:
+            self.queued_force = self.initial_force
+
+    def get_jump_force(self) -> int:
+        return self.queued_force
+
+    def reset(self) -> None:
+        self.queued_force = 0
+        self.max_force_reached = False
+
+
 class Player:
     def __init__(self) -> None:
         self.width = 32
         self.height = 64
         self.speed = 300
-        self.jump_force = 900
-        self.jump_multiplier = 130
-        self.max_jump_force = 10
-        self.jump_count = 0
+        self.jump = ChargeableJump(900, 1800, 50)
         self.max_jump_reached = False
         self.vel = pygame.math.Vector2()
         self.pos = pygame.math.Vector2(WIDTH / 2, FLOOR - self.height)
-
-    def jump(self) -> None:
-        self.vel.y += self.jump_force * -1
 
     def grounded(self) -> bool:
         return self.pos.y + self.height == FLOOR
@@ -44,15 +62,10 @@ class Player:
         keys = pygame.key.get_pressed()
         if keys[pygame.K_UP] or keys[pygame.K_SPACE]:
             if self.grounded():
-                self.jump()
-                self.max_jump_reached = False
-                self.jump_count = 0
-            elif self.vel.y < 0 and not self.max_jump_reached:
-                self.jump_count += 1
-                self.vel.y = self.vel.y - self.jump_multiplier
-                if self.jump_count == self.max_jump_force:
-                    self.max_jump_reached = True
-
+                self.jump.charge()
+        elif self.jump.queued_force > 0:
+            self.vel.y += self.jump.get_jump_force() * -1
+            self.jump.reset()
 
     def draw(self, surface: pygame.Surface) -> None:
         pygame.draw.rect(surface, "white", (*self.pos, self.width, self.height))
