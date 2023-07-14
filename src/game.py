@@ -14,6 +14,32 @@ running = True
 dt = 0
 
 
+class Animation:
+    def __init__(self, frames: list[pygame.Surface], frame_rate: int) -> None:
+        self.frames = frames
+        self.frame_rate = frame_rate
+        self.current_frame_index = 0
+        self.last_tick = pygame.time.get_ticks()
+
+    def update(self) -> None:
+        current_time = pygame.time.get_ticks()
+        if current_time - self.last_tick >= self.frame_rate:
+            self.last_tick = current_time
+            self.current_frame_index += 1
+            if self.current_frame_index >= len(self.frames):
+                self.current_frame_index = 0
+
+    def enter(self):
+        self.current_frame_index = 0
+        self.last_tick = pygame.time.get_ticks()
+
+    def exit(self):
+        self.current_frame_index = 0
+
+    def get_current_frame(self) -> pygame.Surface:
+        return self.frames[self.current_frame_index]
+
+
 class SpriteSheet:
     def __init__(self, image_path: str, cell_width: int, cell_height: int) -> None:
         self.image_path = image_path
@@ -88,17 +114,23 @@ class Player:
         self.falling_frame = 4
         self.jumping_frame = 3
         self.charging_jump = 2
-        self.idle_frames = [0, 1]
+        self.idle_frame = 0
         self.current_frame = 0
+        self.walking = False
+        self.walking_animation = Animation(
+            [self.sprites[1], self.sprites[2]], 250
+        )
         self.jump = ChargeableJump(900, 1800, 50)
         self.vel = pygame.math.Vector2()
         self.pos = pygame.math.Vector2(WIDTH / 2, FLOOR - self.height)
+        self.facing_right = True
 
     def grounded(self) -> bool:
         return self.pos.y + self.height == FLOOR
 
     def update(self, dt: float) -> None:
         self.pos += self.vel * dt
+
         if not self.grounded():
             self.vel.y += GRAVITY
 
@@ -106,14 +138,45 @@ class Player:
         if self.pos.y + self.height > FLOOR:
             self.vel.y = 0
             self.pos.y = FLOOR - self.height
+        if self.pos.x > WIDTH - self.width // 2:
+            self.pos.x = -self.width // 2
+        if self.pos.x + self.width < -self.width // 2:
+            self.pos.x = WIDTH - self.width // 2
 
         keys = pygame.key.get_pressed()
-        if keys[pygame.K_UP] or keys[pygame.K_SPACE]:
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
             if self.grounded():
                 self.jump.charge()
         elif self.jump.queued_force > 0:
             self.vel.y += self.jump.get_jump_force() * -1
             self.jump.reset()
+        elif keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            self.vel.x = -self.speed if not self.vel.y else -self.speed // 2
+            self.facing_right = False
+        elif keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.facing_right = True
+            self.vel.x = self.speed if not self.vel.y else self.speed // 2
+
+        if self.vel.x and not self.vel.y and not self.walking:
+            self.walking_animation.enter()
+            self.walking = True
+
+        if self.vel.y and self.walking or not self.vel.x:
+            self.walking = False
+            self.walking_animation.exit()
+
+        if self.walking:
+            self.walking_animation.update()
+
+        if (
+            not keys[pygame.K_RIGHT]
+            and not keys[pygame.K_d]
+            and not keys[pygame.K_LEFT]
+            and not keys[pygame.K_a]
+            or keys[pygame.K_UP]
+            or keys[pygame.K_w]
+        ):
+            self.vel.x = 0
 
         if self.vel.y < 0:
             self.current_frame = self.jumping_frame
@@ -122,10 +185,13 @@ class Player:
         elif self.jump.queued_force > 0:
             self.current_frame = self.charging_jump
         else:
-            self.current_frame = self.idle_frames[0]
+            self.current_frame = self.idle_frame
 
     def draw(self, surface: pygame.Surface) -> None:
-        surface.blit(self.sprites[self.current_frame], self.pos)
+        sprite = self.sprites[self.current_frame]
+        if self.walking:
+            sprite = self.walking_animation.get_current_frame()
+        surface.blit(pygame.transform.flip(sprite, self.facing_right, False), self.pos)
 
 
 character_sprites = SpriteSheet(os.path.join("assets", "characters.png"), 16, 16)
